@@ -3,7 +3,7 @@ Filename: sat_sim_gui.py
 Author: Nahid Tanjum
 Description: This module provides a GUI for the Satellite Simulator using PyQt5.
              It visualizes satellite positions using VTK, displays adjacency matrices using matplotlib,
-             and shows network graphs using networkx.
+             and shows network graphs using networkx..
 """
 
 import sys
