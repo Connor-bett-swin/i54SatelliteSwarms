@@ -3,7 +3,7 @@ Filename: sat_sim_output.py
 Author: Nahid Tanjum
 
 This module manages the output processes for the Satellite Simulator, including writing data
-to text and CSV files.
+to text and CSV files..
 """
 
 import numpy as np
