@@ -3,7 +3,7 @@ Filename: sat_sim_handler.py
 Author: Nahid Tanjum
 
 This module handles the input of TLE data for satellite simulation processes. It ensures that TLE data
-is loaded correctly from files or direct inputs and then passed to the simulation module.
+is loaded correctly from files or direct inputs and then passed to the simulation module..
 """
 
 import sys
