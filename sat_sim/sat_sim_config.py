@@ -1,66 +1,95 @@
-from module_factory import ModuleKey
+"""
+Filename: sat_sim_config.py
+Author: Nahid Tanjum
 
-def setup_settings_parser(parser):
-    parser.add_argument('--options-file', type=str, help="Set JSON Options File")
-    parser.add_argument('--show-options', action='store_true', help="Display JSON options for module configuration")
+This module manages the configuration settings for the Satellite Simulator. It reads configuration options
+from a JSON file and applies them to the simulation instance, ensuring that all inputs are valid and logical.
+"""
 
+import json
+from datetime import datetime
+from skyfield.api import load, Topos
+from interfaces.config import Config
 
-def setup_flomps_parser(parser):
-    def add_positional_args(parser):
-        parser.add_argument('input_file', type=str, help="Provide relative path to input file")
+class SatSimConfig:
+    def __init__(self, sat_sim=None):
+        # Initialize with an optional satellite simulation instance and load the timescale.
+        self.ts = load.timescale()
+        self.sat_sim = sat_sim
+        self.config_loaded = False
 
-    def add_options_args(parser):
-        # Standalone module execution
-        print("Adding optional args")
-        # options_group = parser.add_argument_group("optional")
+    def _convert_to_timestamp(self, time_str):
+        # Converts date-time string to a Skyfield time object.
+        try:
+            dt_obj = datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S")
+            return self.ts.utc(dt_obj.year, dt_obj.month, dt_obj.day, dt_obj.hour, dt_obj.minute, dt_obj.second)
+        except ValueError:
+            raise ValueError(f"Invalid datetime format: {time_str}. Correct format should be YYYY-MM-DD HH:MM:SS")
 
-        parser.add_argument('--sat-sim-only', action='store_true', help="Run the Satellite Simulator standalone. Requires a TLE file.")
-        parser.add_argument('--algorithm-only', action='store_true', help="Run the Algorithm standalone. Requires an Adjacency Matrices (.am) file.")
-        parser.add_argument('--fl-only', action='store_true', help="Run the Federated Learning standalone. Requires a Federated Learning Adjacency Matrices (.flam) file.")
-        parser.add_argument('--model-only', action='store_true', help="Run the ML model standalone.")
+    def set_gui_enabled(self, enabled):
+        # Sets the GUI mode based on the boolean flag.
+        self.sat_sim.set_gui_enabled(enabled)
 
-    def add_sat_sim_args(parser):
-        print("Adding SAT_SIM args")
-        sat_sim_group = parser.add_argument_group(ModuleKey.SAT_SIM)
+    def read_options(self, options):
+        # Applies configuration options to the SatSim instance.
+        if self.config_loaded:
+            return
 
-        # Add args here
-        sat_sim_group.add_argument('--start-time', type=str, help='The start date/time for the satellite simulation')
-        sat_sim_group.add_argument('--end-time', type=str, help='The end date/time for the satellite simulation')
-        sat_sim_group.add_argument('--timestep', type=int, help='Timestep for the simulation')
+        # Check for all required fields.
+        required_fields = ["gui", "start_time", "end_time", "timestep", "output_file_type"]
+        for field in required_fields:
+            if field not in options:
+                raise ValueError(f"Missing configuration field: {field}")
 
-        sat_sim_group.add_argument('--gui', action='store_true', help='Enable GUI mode for satellite simulation')
+        # Convert start and end times to timestamps and set them.
+        start_time = self._convert_to_timestamp(options['start_time'])
+        end_time = self._convert_to_timestamp(options['end_time'])
+        if start_time.tt >= end_time.tt:
+            raise ValueError("Start time must be before end time.")
+        self.sat_sim.set_start_end_times(start=start_time, end=end_time)
 
-    def add_algorithm_args(parser):
-        print("Adding ALGORITHM args")
-        algorithm_group = parser.add_argument_group(ModuleKey.ALGORITHM)
+        # Set the simulation timestep.
+        timestep = options.get('timestep')
+        if not isinstance(timestep, int) or timestep < 1:
+            raise ValueError(f"Timestep must be an integer greater than 0. Received: {timestep}")
+        self.sat_sim.set_timestep(timestep)
 
-        # Add args here
+        # Set GUI enabled state.
+        self.set_gui_enabled(options.get('gui', False))
 
-    def add_fl_args(parser):
-        print("Adding FL args")
-        fl_group = parser.add_argument_group(ModuleKey.FL)
+        # Set the output file type.
+        if options['output_file_type'] not in ["csv", "txt"]:
+            raise ValueError("Output file type must be 'csv' or 'txt'.")
+        self.sat_sim.set_output_file_type(options['output_file_type'])
 
-        # Add args here
-        fl_group.add_argument('--num-rounds', type=int, help='Number of Federated Learning rounds for the simulation')
-        fl_group.add_argument('--num-clients', type=int, help='Number of Federated Learning clients for the simulation')
+        # Configure the ground station if specified.
+        if 'ground_station' in options:
+            location = options['ground_station'].get('location')
+            if not location or 'lat' not in location or 'long' not in location:
+                raise ValueError("Ground station location must include 'lat' and 'long'.")
+            lat = location['lat']
+            long = location['long']
+            if not (-90 <= lat <= 90 and -180 <= long <= 180):
+                raise ValueError("Latitude must be between -90 and 90, longitude between -180 and 180.")
+            self.sat_sim.ground_station = Topos(latitude_degrees=lat, longitude_degrees=long)
 
-    add_positional_args(parser)
-    add_options_args(parser)
-    add_sat_sim_args(parser)
-    add_algorithm_args(parser)
-    add_fl_args(parser)
+        self.config_loaded = True
 
-    
+    def read_options_from_file(self, file_path):
+        # Reads and applies configuration options from a specified JSON file.
+        if self.config_loaded:
+            return
 
-# def create_subparsers(parser):
-#     subparsers = parser.add_subparsers(dest='command', help="Available commands")
-
-#     # Create subparsers
-#     flomps_parser = subparsers.add_parser('flomps', help="Run a FLOMPS simulation")
-
-#     add_positional_args(flomps_parser)
-#     add_options_args(flomps_parser)
-
-#     add_sat_sim_args(flomps_parser)
-#     add_algorithm_args(flomps_parser)
-#     add_fl_args(flomps_parser)
+        try:
+            with open(file_path, 'r') as file:
+                options = json.load(file)
+            self.read_options(options)
+        except FileNotFoundError:
+            print("Configuration file not found.")
+        except json.JSONDecodeError:
+            print("Error parsing the JSON file.")
+        except IOError as e:
+            print(f"Unable to read file: {e}")
+        except Exception as e:
+            print(f"Error reading options from file: {e}")
+            self.config_loaded = False
