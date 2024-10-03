@@ -3,7 +3,7 @@ Filename: sat_sim.py
 Author: Nahid Tanjum
 Description: This script handles satellite simulations using TLE data and provides functionality 
              for generating adjacency matrices based on satellite positions, with support for 
-             both GUI and CLI operations.
+             both GUI and CLI operations..
 """
 
 from datetime import datetime, timedelta
